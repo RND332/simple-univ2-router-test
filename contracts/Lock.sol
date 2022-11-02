@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.9;
 
-contract Test {
+import "./IUniswapV2Router02.sol";
+import "./IERC20.sol";
+
+contract SimpleRouterTest {
     address[] public routers;
     address[] public connectors;
 
@@ -19,7 +22,21 @@ contract Test {
         address tokenIn,
         address tokenOut
     ) external view returns (uint amountOut, address router, address[] memory path) {
-        // TODO
+        for (uint i = 0; i < routers.length; i++) {                         // делаем цикл по роутерам, что бы проверить все
+            address[] memory path = [](connectors.length + 2);              // создаем массив для хранения коннекторов и токенов
+            path[0] = tokenIn;                                              // первый элемент массива - токен входа               
+            path[connectors.length + 1] = tokenOut;                         // последний элемент массива - токен выхода
+            for (uint j = 0; j < connectors.length; j++) {                  // делаем цикл по коннекторам, что бы добавить их в массив
+                path[j + 1] = connectors[j];
+            }
+            uint checkAmountOut = IUniswapV2Router02(routers[i])
+                .getAmountsOut(amountIn, path)[connectors.length + 1];      // получаем количество выходного токена, для этого роутера и пути
+            if (checkAmountOut > amountOut) {                               // если полученное количество больше, чем текущее максимальное
+                amountOut = checkAmountOut;                                 // то обновляем переменную которую возвращаем
+                router = routers[i];                                        // обновляем роутер который возвращаем
+                path = path;                                                // обновляем путь который возвращаем
+            }
+        }
     }
     
     /**
@@ -36,6 +53,10 @@ contract Test {
         address router,
         address[] memory path
     ) external returns (uint amountOut) {
-        // TODO
+        IERC20(path[0]).transferFrom(msg.sender, address(this), amountIn);  // переводим токен входа на контракт
+        IERC20(path[0]).approve(router, amountIn);                          // разрешаем роутеру использовать токен входа
+        uint[] memory amounts = IUniswapV2Router02(router)
+            .swapExactTokensForTokens(amountIn, amountOutMin, path, msg.sender, block.number + 200); // меняем токены
+        amountOut = amounts[amounts.length - 1];                            // получаем количество выходного токена
     }
 }
